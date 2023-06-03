@@ -4,73 +4,76 @@ from qutip import *
 import pandas as pd
 import os
 
-# System parameters
-omega_cavity = 1.0 * 2 * np.pi  # cavity frequency
-omega_atom = 1.0 * 2 * np.pi  # atom frequency
-g = 0.05 * 2 * np.pi  # coupling strength
-kappa = 0.005  # cavity dissipation rate
-gamma = 0.05  # atom dissipation rate
-N = 20  # number of cavity Fock states
-n_th_a = 0.0  # average number of thermal bath excitations
-n_photons = 1
-tlist = np.linspace(0, 25, 101)
+# Define system parameters
+omega_cavity = 1.0 * 2 * np.pi  # Frequency of the cavity (in rad/s)
+omega_atom = 1.0 * 2 * np.pi  # Frequency of the atom (in rad/s)
+g = 0.05 * 2 * np.pi  # Coupling strength between the atom and the cavity (in rad/s)
+kappa = 0.005  # Dissipation rate of the cavity (in rad/s)
+gamma = 0.05  # Dissipation rate of the atom (in rad/s)
+N = 20  # Maximum number of photons in the cavity
+n_th_a = 0.1  # Average number of thermal bath excitations
+n_photons = 1  # Initial number of photons in the cavity
+tlist = np.linspace(0, 25, 101)  # Times at which to calculate the system's state
 
-# Initial state
+# Define the initial state of the system as a tensor product of the cavity's state and the atom's state
+# The cavity is initially in a Fock state with n_photons photons, and the atom is initially in a superposition of its ground and excited states
 psi0 = tensor(fock(N, n_photons), basis(2, 0) + basis(2, 1)).unit()
 
-# Operators
-a = tensor(destroy(N), qeye(2))
-sm = tensor(qeye(N), destroy(2))
+# Define the annihilation operator for the cavity and the atom
+a = tensor(destroy(N), qeye(2))  # Operator to destroy a photon in the cavity
+sm = tensor(qeye(N), destroy(2))  # Operator to lower the atom from the excited state to the ground state
 
-# Hamiltonian
+# Define the Hamiltonian of the system
+# The first term describes the energy of the cavity, the second term the energy of the atom, and the last term the interaction energy between the cavity and the atom
 H = omega_cavity * a.dag() * a + omega_atom * sm.dag() * sm + g * (a.dag() + a) * (sm + sm.dag())
 
+# Define the collapse operators that describe the dissipation of the system
 c_ops = []
 
-# Cavity relaxation
+# Add the operator that describes the relaxation of the cavity, i.e., a photon leaving the cavity and going into the thermal bath
 rate = kappa * (1 + n_th_a)
 if rate > 0.0:
     c_ops.append(np.sqrt(rate) * a)
 
-# Cavity excitation, if temperature > 0
+# Add the operator that describes the excitation of the cavity, i.e., a photon from the thermal bath entering the cavity
 rate = kappa * n_th_a
 if rate > 0.0:
     c_ops.append(np.sqrt(rate) * a.dag())
 
-# Qubit relaxation
+# Add the operator that describes the relaxation of the atom, i.e., the atom going from the excited state to the ground state
 rate = gamma
 if rate > 0.0:
     c_ops.append(np.sqrt(rate) * sm)
 
-# Define sigma X, sigma Y, and sigma Z operators
+# Define the Pauli operators sigma X, sigma Y, and sigma Z for the atom
 sigmax = tensor(qeye(N), sigmax())
 sigmay = tensor(qeye(N), sigmay())
 sigmaz = tensor(qeye(N), sigmaz())
 
-# Define the list of operators for tracking
-e_ops = [ omega_cavity * a.dag() * a, omega_atom * sm.dag() * sm, sigmax, sigmay, sigmaz, H]
+# Define the list of operators for which to calculate the expectation value
+e_ops = [omega_cavity * a.dag() * a, omega_atom * sm.dag() * sm, sigmax, sigmay, sigmaz, H]
 
-# Perform the simulation
+# Solve the master equation for the system
 output = mesolve(H, psi0, tlist, c_ops, e_ops)
 
-# Extract the expectation values
-e_c = output.expect[0]
-e_a = output.expect[1]
-sigma_x = output.expect[2]
-sigma_y = output.expect[3]
-sigma_z = output.expect[4]
-e_t = output.expect[5]
+# Extract the expectation values from the solution
+e_c = output.expect[0]  # Expectation value of the number of photons in the cavity
+e_a = output.expect[1]  # Expectation value of the atom's excited state population
+sigma_x = output.expect[2]  # Expectation value of sigma X
+sigma_y = output.expect[3]  # Expectation value of sigma Y
+sigma_z = output.expect[4]  # Expectation value of sigma Z
+e_t = output.expect[5]  # Expectation value of the total energy of the system
 
-# Create a figure for the plots
+# Create plots to visualize the evolution of the system
 fig, axes = plt.subplots(5, 1, figsize=(10, 22))
 
-# Plot expectation value of sigma Z
+# Plot the expectation value of sigma Z
 axes[0].plot(tlist, sigma_z)
 axes[0].set_xlabel('Time')
 axes[0].set_ylabel('Expectation value')
 axes[0].set_title('Expectation value of sigma Z')
 
-# Plot expectation values of sigma X and sigma Y
+# Plot the expectation values of sigma X and sigma Y
 axes[1].plot(tlist, sigma_x, label="Sigma X")
 axes[1].plot(tlist, sigma_y, label="Sigma Y")
 axes[1].legend(loc=0)
@@ -78,67 +81,61 @@ axes[1].set_xlabel('Time')
 axes[1].set_ylabel('Expectation value')
 axes[1].set_title('Expectation values of sigma X and sigma Y')
 
-# Plot total qubit energy
-qubit_energy = e_a 
-axes[2].plot(tlist, qubit_energy, color='blue')
+# Plot the total energy of the qubit (the atom)
+axes[2].plot(tlist, e_a, color='blue')
 axes[2].set_xlabel('Time')
 axes[2].set_ylabel('Qubit Energy')
 axes[2].set_title('Total Qubit Energy')
 
-# Plot Cavity energy of the system
-cavity_energy = e_c 
-axes[3].plot(tlist, cavity_energy, color='green')
+# Plot the total energy of the cavity
+axes[3].plot(tlist, e_c, color='green')
 axes[3].set_xlabel('Time')
 axes[3].set_ylabel('Cavity Energy')
 axes[3].set_title('Total Cavity Energy')
 
-# Plot total energy of the system
-total_energy = e_t
-axes[4].plot(tlist, total_energy, color='purple')
+# Plot the total energy of the system
+axes[4].plot(tlist, e_t, color='purple')
 axes[4].set_xlabel('Time')
 axes[4].set_ylabel('Total Energy')
 axes[4].set_title('Total Energy')
 
+# Adjust the layout of the plots
 plt.tight_layout()
 plt.show()
 
 # Define the base filename
 base_filename = 'BaseJCModel010101'
 
-# Find the next available filename for the figure
+# Save the figure to a file with the next available filename
 file_count = 1
 filename = f'{base_filename}.png'
 while filename in os.listdir():
     filename = f'{base_filename}0{file_count}.png'
     file_count += 1
-
-# Save the figure as a PNG file
 plt.savefig(filename)
 
 # Close the figure
 plt.close(fig)
 
-# Print the values at each time step
+# Print the expectation values at each time step
 for i in range(len(tlist)):
-    print(f"{tlist[i]:.2f} Total Energy {total_energy[i]:.12f} Qubit Energy {qubit_energy[i]:.12f} Cavity Energy {cavity_energy[i]:.12f} Sigma Z {sigma_z[i]:.12f} Sigma Y {sigma_y[i]:.12f} Sigma X {sigma_x[i]:.12f}")
+    print(f"{tlist[i]:.2f} Total Energy {e_t[i]:.12f} Qubit Energy {e_a[i]:.12f} Cavity Energy {e_c[i]:.12f} Sigma Z {sigma_z[i]:.12f} Sigma Y {sigma_y[i]:.12f} Sigma X {sigma_x[i]:.12f}")
 
-# Create a DataFrame with the data
+# Create a DataFrame with the expectation values
 data = pd.DataFrame({
     'Time Step': tlist,
-    'Energy Total': total_energy,
-    'Qubit Energy': qubit_energy,
-    'Cavity Energy': cavity_energy,
+    'Energy Total': e_t,
+    'Qubit Energy': e_a,
+    'Cavity Energy': e_c,
     'Sigma Z': sigma_z,
     'Sigma Y': sigma_y,
     'Sigma X': sigma_x
 })
 
-# Find the next available filename for the data
+# Save the DataFrame to a file with the next available filename
 file_count = 1
 filename = f'{base_filename}.csv'
 while filename in os.listdir():
     filename = f'{base_filename}0{file_count}.csv'
     file_count += 1
-
-# Export the DataFrame to a CSV file
 data.to_csv(filename, index=False)
